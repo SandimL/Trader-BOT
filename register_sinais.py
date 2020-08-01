@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime,timedelta
 import time
 import pytz as tz
 from iqoptionapi.stable_api import IQ_Option
@@ -12,18 +12,16 @@ def timestamp_converter(x):  # Função para converter timestamp
 
     return hora
 
-
 API = IQ_Option('ra165341@ucdb.br', 'querowinpora')
 API.connect()
 API.change_balance('PRACTICE')
-par = 'EURUSD'
 
-# MOSTRA SE ACESSOU OU nao NA IQOPTION
+ajuste_hora = 0
+ajuste_minuto = 0
+
+
 while True:
     if (not API.check_connect()):
-        print('**#############################** \n # Erro ao se conectar#  \n **#############################**')
-        # No video é apresentado a funcao reconnect(), mas nas versao mais novas da API ela nao está mais disponivel,
-        # sendo assim deve ser utilizado API.connect() para realizar a conexao novamente
         API.connect()
     else:
         print("Conectou")
@@ -83,7 +81,8 @@ def timestamp_converter(x, retorno=1):
 
 
 def horario():
-    hora = datetime.now()
+    # hora = datetime.now()
+    hora = datetime.now()-timedelta(hours=ajuste_hora, minutes=ajuste_minuto)
     hora = hora.strftime('%H:%M:%S')
     return hora
 
@@ -115,10 +114,10 @@ def realizarTrade(par, valor_entrada, dir, timeframe, tipo):
     payout = Payout(par, tipo, timeframe)
     lucro = 0  # nao ALTERAR
     # COLOQUE AQUI A QUANTIDADE DE GALES  !=! BORA QUEBRAR ESSA BANCA ...
-    martingale = 2
+    martingale = 1
     martingale += 1  # nao ALTERAR
 
-    stop_loss = 10000  # STOP LOSS == COLOQUE AQUI O VALOR MAXIMO DE PERCA
+    stop_loss = 10  # STOP LOSS == COLOQUE AQUI O VALOR MAXIMO DE PERCA
     stop_gain = 10000  # STOP WIN == COLOQUE AQUI O VALOR MAXIMO DE GANHOS
     # ===================================
 
@@ -154,8 +153,8 @@ def realizarTrade(par, valor_entrada, dir, timeframe, tipo):
                               round(lucro, 2), ('/ ' + str(i) + ' GALE' if i > 0 else ''))
                         print('\n   ============================')
 
-                        valor_entrada = Martingale(valor_entrada, payout)
-
+                        # valor_entrada = Martingale(valor_entrada, payout)
+                        valor_entrada = valor_entrada * 2
                         stop(lucro, stop_gain, stop_loss)
 
                         break
@@ -195,7 +194,6 @@ def realizarTrade(par, valor_entrada, dir, timeframe, tipo):
                         print('WIN /' if valor > 0 else 'LOSS /', round(valor, 2), '/',
                               round(lucro, 2), ('/ ' + str(i) + ' GALE' if i > 0 else ''))
                         print('\n   ============================')
-
                         valor_entrada = Martingale(valor_entrada, payout)
 
                         stop(lucro, stop_gain, stop_loss)
@@ -204,12 +202,7 @@ def realizarTrade(par, valor_entrada, dir, timeframe, tipo):
                 if valor > 0:
                     break
             else:
-                print('\n   ERRO AO REALIZAR OPERAcaO\n\n')
-
-
-#:===============================================================:#
-
-
+                print('\n RRO AO REALIZAR OPERAcaO\n\n')
 
 while True:
     for sinal in lista:
@@ -220,27 +213,19 @@ while True:
         timeframe = int(dados[3])  # -> ARMAZENA O TIMEFRAME
         dirx = dados[4]  # -> ARMAZENA A DIREcaO (CALL OU PUT)
         valor_entrada = float(dados[5])  # -> ARMAZENA O VALOR DA ENTRADA
-        # -> ARMAZENA A DATA E HORA ATUAL DO SERVIDOR (ANO/MES/DIA HORA:MINUTO:SEGUNDOS
-        agora = datetime.now()
-        # -> ARMAZENA A DATA ATUAL PELO FORMATO DIA/MES/ANO DA VARIAVEL AGORA
-        data_atual = agora.strftime('%D-%M-%Y')
-        # RECEBE O TIPO DE OPERAcaO  => (B) BINARIA e (D) DIGITAL
+        agora = horario()
+        data_atual = datetime.now().date().strftime('%d/%m/%y')
+
         tipo_op = dados[6]
-        # time.sleep(1)
-        if data >= data_atual:  # CONDIcaO: ENQUANTO DA DATA FOR MAIOR OU IGUAL A DATA ATUAL EXECUTA OS COMANDOS ABAIXO
-            entrou = 1  # -> ARMAZENA 1 CASO TENHA ENTRADO NA CONDIcaO ACIMA
-            now = datetime.now()  # -> ARMAZENA A DATA ATUAL DO COMPUTADOR NA VARIAVEL NOW
-            # -> SEPARA SOMENTE A HORA DA VARIAVEL NOW
-            hora_atual = now.strftime("%H:%M:%S")
-            # -> PEGA A DIREcaO E DEIXA EM MINÚSCULO PARA nao CAUSAR ERRO NAS ENTRADAS
+        if data >= data_atual:
+            entrou = 1
+            hora_atual = agora
             dir = dirx.lower()
             tipo = tipo_op.lower()
-            print(hora_atual == dados[1])
-            print(dados[1])
             print(hora_atual)
-            # -> CONDIcaO: SE A HORA ATUAL FOR IGUAL A HORA DA LISTA DE SINAIS EXECUTAR OS COMANDOS ABAIXO:
+            print(dados[1])
+
             if hora_atual == dados[1]:
                 realizarTrade(par, valor_entrada, dir, timeframe, tipo)
-
-        if entrou == 0:  # -> CONDIcaO: SE nao ENTROU NO LOOP ENQUANTO DATA FOR MAIOR OU IGUAL A DATA ATUAL INFORMA O ERRO ABAIXO:
-            print('   nao foi possível executar a operacao!')
+            if entrou == 0:
+                print('nao foi possível executar a operacao!')
