@@ -1,14 +1,25 @@
 import random
+from datetime import datetime
 
-hora = 17
-minuto = 30
 
-while hora <= 20:
-    for i in range(19):
-        minuto += 3
-        if minuto >= 57:
-            hora += 1
-            minuto = 0
-        valor = 1
-        compra_ou_venda = random.choices(["call", "put"])
-        print("01/08/2020,{:0>2}:{:0>2}:00,EURUSD-OTC,1,{},{},b".format(hora, minuto, compra_ou_venda[0], valor))
+def crea_file(hour, minute, file, actives):
+    while hour <= 20:
+        for i in range(19):
+            minute += 3
+            if minute >= 57:
+                hour += 1
+                minute = 0
+            value = 1
+            call_or_put = random.choices(["call", "put"])
+            date = datetime.now().date().strftime('%d/%m/%y')
+            file.write(
+                "{},{:0>2}:{:0>2}:00,{},1,{},{},b\n".format(date, hour, minute, actives, call_or_put[0], value))
+    file.close()
+
+
+if __name__ == '__main__':
+    hour = 13
+    minute = 30
+
+    file = open("./sinais.txt", "w")
+    crea_file(hour, minute, file, "EURUSD-OTC")
