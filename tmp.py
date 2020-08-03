@@ -2,7 +2,7 @@ import random
 from datetime import datetime
 
 
-def create_file(hour, minute, file, actives):
+def crea_file(hour, minute, file, actives):
     while hour <= 20:
         for i in range(19):
             minute += 3
@@ -22,4 +22,4 @@ if __name__ == '__main__':
     minute = 30
 
     file = open("../sinais.txt", "w")
-    create_file(hour, minute, file, "EURUSD-OTC")
+    crea_file(hour, minute, file, "EURUSD-OTC")
