@@ -1,9 +1,9 @@
 from iqoptionapi.stable_api import IQ_Option
-from datetime import datetime, timedelta
+from datetime import datetime
+from pytz import timezone
 import time
 import sys
 import os
-
 
 def stop(profit, gain, loss):
     if profit <= float('-' + str(abs(loss))):
@@ -14,8 +14,9 @@ def stop(profit, gain, loss):
         print('Stop Gain')
         sys.exit()
 
-# def configure_timezone():
-#     os.environ['TZ'] = 'Europe/London'
+def get_iq_timezone():
+    return timezone(API.get_profile_ansyc()['tz'])
+
 
 def load_signals():
     file = open('sinais.txt', encoding='UTF-8')
@@ -91,23 +92,29 @@ def logging(call_or_put, id_martingale, order_value, lucro, name_active, ordem_o
 
 
 def date_now():
-    return datetime.now().date().strftime('%d/%m/%y')
+    return datetime.now(get_iq_timezone()).date().strftime('%d/%m/%y')
 
 
 def horary():
-    hour = datetime.now() - timedelta(hours=ajuste_hora, minutes=ajuste_minuto)
+    hour = datetime.now(get_iq_timezone())
     hour = hour.strftime('%H:%M:%S')
     return hour
 
 
-def conect():
+def connect():
+    API.connect()
     while True:
-        if (not API.check_connect()):
+        while not API.check_connect():
             API.connect()
-        else:
-            print("connecting")
-            break
-        time.sleep(5)
+            time.sleep(5)
+
+        print("connecting")
+        balance_mode = ['REAL', 'PRACTICE']
+        API.change_balance(balance_mode[1])
+        signals = load_signals()
+        process(signals)
+        break
+
 
 
 def process(signals):
@@ -135,17 +142,8 @@ def execute_signal(signal):
 
 if __name__ == '__main__':
     API = IQ_Option('ra165341@ucdb.br', 'querowinpora')
-    API.connect()
-    balance_mode = ['REAL', 'PRACTICE']
-    API.change_balance(balance_mode[1])
-
-    ajuste_hora = 0
-    ajuste_minuto = 0
     max_martingale = 1
-
     stop_loss = 10
     stop_gain = 10000
+    connect()
 
-    conect()
-    signals = load_signals()
-    process(signals)
