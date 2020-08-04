@@ -15,22 +15,6 @@ logger.setLevel(logging.INFO)
 
 """
 1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
-Função que conecta a API do IQ Option.
-Executa o laço até a conexão com a API.
-"""
-
-
-def connect():
-    while (not API.check_connect()):
-        API.connect()
-        logger.warning("Retry connection in 5 seconds")
-        time.sleep(5)
-
-    logger.info("Connected")
-
-
-"""
-1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
 Função que para a execução do bot e apresenta se o BOT perdeu ou ganhou dinheiro.
 Utilizada em @method trading_digitals() e @method trading_binary() 
 
@@ -97,8 +81,6 @@ def process(signals):
             execute_signal(signal_data)
 
 
-
-
 """
 1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
 Função que executa a operação, dado seu tipo.
@@ -136,11 +118,11 @@ def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value):
             if order_profit > 0:
                 logger.info(
                     "Profit order id: {}  order_profit: {} current profit: {} - WIN".format(ordem_id, order_profit,
-                                                                                            profit))
+                                                                                            round(profit, 2)))
                 break
             logger.info("Order id:{} Loss: {}".format(ordem_id, order_profit))
             logger.info("Current profit: {}".format(profit))
-            logger.info('Executing GATE')
+            logger.info('Executing martingale')
             stop(profit, stop_gain, stop_loss)
         else:
             logger.error('Error placing order')
@@ -170,12 +152,12 @@ def trading_binary(call_or_put, profit, name_active, exp_timer, order_value):
             if order_profit > 0:
                 logger.info(
                     "Profit order id: {}  order_profit: {} current profit: {} - WIN".format(ordem_id, order_profit,
-                                                                                            profit))
+                                                                                            round(profit, 2)))
                 break
             logger.info("Order id:{} Loss: {}".format(ordem_id, order_profit))
             logger.info("Current profit: {}".format(profit))
             logger.info('Executing GATE')
-            stop(profit, stop_gain, stop_loss)
+            # stop(profit, stop_gain, stop_loss)
         else:
             logger.error('Error placing order')
     return profit, call_or_put, order_value
@@ -218,12 +200,15 @@ def connect():
         process(signals)
         break
 
+
 """
 1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
 Executa o sinal.
 
 @param signal sinal a ser executado.
 """
+
+
 def execute_signal(signal_data):
     name_active = str(signal_data[1])
     expiration_time = int(signal_data[2])
@@ -243,7 +228,7 @@ Função principal que executa:
 
 
 def get_config(path='config.json'):
-    with open('config.json', 'r') as json_file:
+    with open(path, 'r') as json_file:
         config = json.load(json_file)
     return config
 
@@ -251,7 +236,7 @@ def get_config(path='config.json'):
 if __name__ == '__main__':
     config = get_config('./config.json')
     API = IQ_Option(config['email'], config['password'])
-    max_martingale = config['stop_loss']
-    stop_loss = config['max_martingale']
+    max_martingale = config['max_martingale']
+    stop_loss = config['stop_loss']
     stop_gain = config['stop_gain']
     connect()
