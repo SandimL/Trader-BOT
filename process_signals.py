@@ -1,9 +1,10 @@
+import csv
+
 from iqoptionapi.stable_api import IQ_Option
 from datetime import datetime
 from pytz import timezone
 import time
 import sys
-import os
 import logging
 import json
 
@@ -67,20 +68,11 @@ def load_signals():
     # Carrega o arquivo de sinais
     logger.info('Load signals')
 
-    file = open('sinais.txt', encoding='UTF-8')
+    with open('sinais.csv', newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        data = [list(row) for row in reader]
 
-    # Lê o arquivo
-    signals = file.read()
-    file.close
-
-    # Separa os sinais pelo "Enter"
-    signals = signals.split('\n')
-
-    # Limpa a lista de sinais, retirando os vazios
-    for index, value in enumerate(signals):
-        if value == '':
-            del signals[index]
-    return signals
+    return data
 
 
 """
@@ -94,34 +86,17 @@ Recebe como parâmetro a lista de sinais, lida pela @method load_signals()
 
 def process(signals):
     FMT = '%H:%M:%S'
-    for signal in signals:
-        signal_data = signal.split(',')
+    for signal_data in signals:
         signal_hour = signal_data[0]
         time_now = horary()
 
         if (datetime.strptime(time_now, FMT) < datetime.strptime(signal_hour, FMT)):
             wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now, FMT)
             time.sleep(wait_time.seconds - 1)
-            logger.info('Running signal: [{}]'.format(signal))
-            execute_signal(signal)
+            logger.info('Running signal: {}'.format(signal_data))
+            execute_signal(signal_data)
 
 
-"""
-1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
-Executa o sinal.
-
-@param signal sinal a ser executado.
-"""
-
-
-def execute_signal(signal):
-    signal_data = signal.split(',')
-    name_active = str(signal_data[1])
-    expiration_time = int(signal_data[2])
-    call_or_put = signal_data[3].lower()
-    signal_value = float(signal_data[4])
-    operation_type = signal_data[5].lower()
-    run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type)
 
 
 """
@@ -243,9 +218,13 @@ def connect():
         process(signals)
         break
 
+"""
+1ª Documentação - 03/08/2020 - @author Mateus Ragazzi
+Executa o sinal.
 
-def execute_signal(signal):
-    signal_data = signal.split(',')
+@param signal sinal a ser executado.
+"""
+def execute_signal(signal_data):
     name_active = str(signal_data[1])
     expiration_time = int(signal_data[2])
     call_or_put = signal_data[3].lower()
