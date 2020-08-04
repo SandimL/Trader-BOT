@@ -12,7 +12,7 @@ def create_file(file, active):
             if minute >= 57:
                 hour += 1
                 minute = 0
-            value = 1
+            value = 3.55
             call_or_put = random.choices(["call", "put"])
             file.write(
                 "{:0>2}:{:0>2}:00,{},1,{},{},b\n".format(hour, minute, active, call_or_put[0], value))
