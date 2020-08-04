@@ -5,6 +5,7 @@ import time
 import sys
 import os
 import logging
+import json
 
 FMT = '%(levelname)s - %(asctime)s - MSG: %(message)s'
 logging.basicConfig(format=FMT, filename='process.log', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -232,7 +233,7 @@ def connect():
     while True:
         while not API.check_connect():
             API.connect()
-            logger.info('connecting')
+            logger.warning("Retry connection in 5 seconds")
             time.sleep(5)
 
         logger.info('Connected')
@@ -261,9 +262,17 @@ Função principal que executa:
     - Processa os sinais através @method process()
 """
 
+
+def get_config(path='config.json'):
+    with open('config.json', 'r') as json_file:
+        config = json.load(json_file)
+    return config
+
+
 if __name__ == '__main__':
-    API = IQ_Option('ra165341@ucdb.br', 'querowinpora')
-    max_martingale = 1
-    stop_loss = 10
-    stop_gain = 10000
+    config = get_config('./config.json')
+    API = IQ_Option(config['email'], config['password'])
+    max_martingale = config['stop_loss']
+    stop_loss = config['max_martingale']
+    stop_gain = config['stop_gain']
     connect()
