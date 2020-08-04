@@ -2,6 +2,7 @@ from iqoptionapi.stable_api import IQ_Option
 from datetime import datetime, timedelta
 import time
 import sys
+import os
 
 
 def stop(profit, gain, loss):
@@ -13,6 +14,8 @@ def stop(profit, gain, loss):
         print('Stop Gain')
         sys.exit()
 
+# def configure_timezone():
+#     os.environ['TZ'] = 'Europe/London'
 
 def load_signals():
     file = open('sinais.txt', encoding='UTF-8')
@@ -56,6 +59,7 @@ def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value):
 
 def trading_binary(call_or_put, profit, name_active, exp_timer, order_value):
     for id_martingale in range(max_martingale + 1):
+
         status, ordem_id = API.buy(order_value, name_active, call_or_put, exp_timer)
 
         if status:
@@ -107,20 +111,26 @@ def conect():
 
 
 def process(signals):
-    while True:
-        for sinal in signals:
-            order_data = sinal.split(',')
-            order_date = order_data[0]
-            order_hour = order_data[1]
-            name_active = str(order_data[2])
-            exp_timer = int(order_data[3])
-            call_or_put = order_data[4].lower()
-            order_value = float(order_data[5])
+    FMT = '%H:%M:%S'
+    for signal in signals:
+        signal_data = signal.split(',')
+        signal_hour = signal_data[0]
+        time_now = horary()
 
-            if order_date >= date_now():
-                operation_type = order_data[6].lower()
-                if horary() == order_hour:
-                    run_trader(name_active, order_value, call_or_put, exp_timer, operation_type)
+        if(datetime.strptime(time_now, FMT) < datetime.strptime(signal_hour, FMT)):
+            wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now, FMT)
+            time.sleep(wait_time.seconds - 1)
+            execute_signal(signal)
+
+
+def execute_signal(signal):
+    signal_data = signal.split(',')
+    name_active = str(signal_data[1])
+    expiration_time = int(signal_data[2])
+    call_or_put = signal_data[3].lower()
+    signal_value = float(signal_data[4])
+    operation_type = signal_data[5].lower()
+    run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type)
 
 
 if __name__ == '__main__':
