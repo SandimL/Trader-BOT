@@ -156,8 +156,8 @@ def trading_binary(call_or_put, profit, name_active, exp_timer, order_value):
                 break
             logger.info("Order id:{} Loss: {}".format(ordem_id, order_profit))
             logger.info("Current profit: {}".format(profit))
-            logger.info('Executing GATE')
-            # stop(profit, stop_gain, stop_loss)
+            logger.info('Executing martingale')
+            stop(profit, stop_gain, stop_loss)
         else:
             logger.error('Error placing order')
     return profit, call_or_put, order_value
