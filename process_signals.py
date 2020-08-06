@@ -1,5 +1,4 @@
 import csv
-
 from iqoptionapi.stable_api import IQ_Option
 from datetime import datetime
 from pytz import timezone
@@ -7,6 +6,7 @@ import time
 import sys
 import logging
 import json
+import numpy as np
 
 FMT = '%(levelname)s - %(asctime)s - MSG: %(message)s'
 logging.basicConfig(format=FMT, filename='process.log', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -71,14 +71,31 @@ Recebe como parâmetro a lista de sinais, lida pela @method load_signals()
 def process(signals):
     FMT = '%H:%M:%S'
     for signal_data in signals:
-        signal_hour = signal_data[0]
         time_now = horary()
-
-        if (datetime.strptime(time_now, FMT) < datetime.strptime(signal_hour, FMT)):
-            wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now, FMT)
+        candle_size = int(signal_data[2]) * 60
+        name_active = str(signal_data[1])
+        signal_hour = signal_data[0]
+        if is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
+            wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now.strftime('%H:%M:%S'), FMT)
             time.sleep(wait_time.seconds - 1)
             logger.info('Running signal: {}'.format(signal_data))
             execute_signal(signal_data)
+
+
+def is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
+    is_valid_datetime = datetime.strptime(time_now.strftime('%H:%M:%S'), FMT) < datetime.strptime(signal_hour, FMT)
+    if is_valid_datetime:
+        is_valid_SMA = is_valid_value_SMA(candle_size, name_active, time_now)
+        logger.info("valid SMA: {} - valid datetime: True".format(is_valid_SMA))
+        return is_valid_SMA
+    return False
+
+
+def is_valid_value_SMA(candle_size, name_active, time_now):
+    current_candle = API.get_candles(name_active, candle_size, 1, time_now.timestamp())
+    candle_open_value = round(current_candle[0]['open'], 5)
+    sma_value = metric_SMA(name_active, candle_size) - 1
+    return candle_open_value >= sma_value
 
 
 """
@@ -110,7 +127,6 @@ def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value):
         if status:
             while True:
                 status, order_profit = API.check_win_digital_v2(ordem_id)
-
                 if status:
                     profit += round(order_profit, 2)
                     order_value = order_value * 2
@@ -181,8 +197,21 @@ Pega o horário atual no formato H:M:S
 
 def horary():
     hour = datetime.now(get_iq_timezone())
-    hour = hour.strftime('%H:%M:%S')
     return hour
+
+
+def metric_SMA(name_active="EURUSD", candle_size=60, period=21, time=time.time()):
+    candles = API.get_candles(name_active, candle_size, period, time)
+    candles_value = []
+    for c in candles:
+        candles_value.append(float(c['open']))
+    return round(movingaverage(candles_value, period)[-1], 5)
+
+
+def movingaverage(values, window):
+    weigths = np.repeat(1.0, window) / window
+    smas = np.convolve(values, weigths, 'valid')
+    return smas  # as a numpy array
 
 
 def connect():
