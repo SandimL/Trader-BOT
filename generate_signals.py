@@ -32,9 +32,8 @@ def create_filecsv(active):
                 if minute >= 57:
                     hour += 1
                     minute = 0
-                value = 3.12
                 call_or_put = random.choices(["call", "put"])
-                spamwriter.writerow(["{:0>2}:{:0>2}:00".format(hour, minute), active, 5, call_or_put[0], value, "b"])
+                spamwriter.writerow(["{:0>2}:{:0>2}:00".format(hour, minute), active, 5, call_or_put[0], "b"])
 
 
 if __name__ == '__main__':

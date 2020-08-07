@@ -196,8 +196,7 @@ Pega o horário atual no formato H:M:S
 
 
 def horary():
-    hour = datetime.now(get_iq_timezone())
-    return hour
+    return datetime.now(get_iq_timezone())
 
 
 def metric_SMA(name_active="EURUSD", candle_size=60, period=21, time=time.time()):
@@ -242,8 +241,8 @@ def execute_signal(signal_data):
     name_active = str(signal_data[1])
     expiration_time = int(signal_data[2])
     call_or_put = signal_data[3].lower()
-    signal_value = float(signal_data[4])
-    operation_type = signal_data[5].lower()
+    signal_value = config['wallet'] * config['pct_wallet']
+    operation_type = signal_data[4].lower()
     run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type)
 
 
@@ -266,6 +265,6 @@ if __name__ == '__main__':
     config = get_config('./config.json')
     API = IQ_Option(config['email'], config['password'])
     max_martingale = config['max_martingale']
-    stop_loss = config['stop_loss']
-    stop_gain = config['stop_gain']
+    stop_loss = config['wallet'] * config['pct_stop_loss']
+    stop_gain = config['wallet'] * config['pct_stop_gain']
     connect()
