@@ -14,4 +14,4 @@ pip-log.txt
 pypackages/
 
 *.log
-sinais.csv
+*.csv
