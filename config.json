@@ -4,7 +4,7 @@
   "max_martingale": 1,
   "pct_stop_loss": 0.10,
   "pct_stop_gain": 0.10,
-  "pct_wallet": 0.29,
+  "pct_wallet": 0.02,
   "balance_mode": "PRACTICE",
-  "wallet": 100
+  "martingale": true
 }
