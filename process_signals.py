@@ -96,7 +96,7 @@ def is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
 def is_valid_value_SMA(candle_size, name_active, time_now):
     current_candle = API.get_candles(name_active, candle_size, 1, time_now.timestamp())
     candle_open_value = round(current_candle[0]['open'], 5)
-    sma_value = metric_SMA(name_active, candle_size) - 1
+    sma_value = metric_SMA(name_active, candle_size)
     return candle_open_value >= sma_value
 
 
