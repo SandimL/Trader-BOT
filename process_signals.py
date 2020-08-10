@@ -1,12 +1,13 @@
 import csv
 from iqoptionapi.stable_api import IQ_Option
-from datetime import datetime
+from datetime import datetime, timedelta
 from pytz import timezone
 import time
 import sys
 import logging
 import json
 import numpy as np
+import pandas as pd
 
 FMT = '%(levelname)s - %(asctime)s - MSG: %(message)s'
 logging.basicConfig(format=FMT, filename='process.log', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -77,9 +78,10 @@ def process(signals):
         signal_hour = signal_data[0]
         if is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
             wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now.strftime('%H:%M:%S'), FMT)
-            time.sleep(wait_time.seconds - 1)
             logger.info('Running signal: {}'.format(signal_data))
-            execute_signal(signal_data)
+            time.sleep(wait_time.seconds - 1)
+            execute_signal(signal_data, time_now)
+    report.to_csv('report.csv', index=False)
 
 
 def is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
@@ -104,12 +106,12 @@ Função que executa a operação, dado seu tipo.
 """
 
 
-def run_trader(name_active, order_value, call_or_put, exp_timer, operation_type):
+def run_trader(name_active, order_value, call_or_put, exp_timer, operation_type, time_now):
     profit = 0
     if operation_type == "b":
-        trading_binary(call_or_put, profit, name_active, exp_timer, order_value)
-    if operation_type == "d":
-        trading_digitals(call_or_put, profit, name_active, exp_timer, order_value)
+        trading_binary(call_or_put, profit, name_active, exp_timer, order_value, time_now)
+    elif operation_type == "d":
+        trading_digitals(call_or_put, profit, name_active, exp_timer, order_value, time_now)
 
 
 """
@@ -119,7 +121,7 @@ Invocada pela @method run_trader()
 """
 
 
-def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value):
+def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value, time_now):
     for id_martingale in range(max_martingale + 1):
         status, ordem_id = API.buy_digital_spot(
             name_active, order_value, call_or_put, exp_timer)
@@ -131,17 +133,19 @@ def trading_digitals(call_or_put, profit, name_active, exp_timer, order_value):
                     profit += round(order_profit, 2)
                     order_value = order_value * 2
                     break
+            add_order_to_the_report(call_or_put, exp_timer, name_active, order_value, profit, time_now)
             if order_profit > 0:
                 logger.info(
                     "Profit order id: {}  order_profit: {} current profit: {} - WIN".format(ordem_id, order_profit,
                                                                                             round(profit, 2)))
                 break
+            stop(profit, stop_gain, stop_loss)
             logger.info("Order id:{} Loss: {}".format(ordem_id, order_profit))
             logger.info("Current profit: {}".format(profit))
             logger.info('Executing martingale')
-            stop(profit, stop_gain, stop_loss)
         else:
             logger.error('Error placing order')
+    return call_or_put, profit, name_active, exp_timer, order_value
 
 
 """
@@ -151,32 +155,34 @@ Invocada pela @method run_trader()
 """
 
 
-def trading_binary(call_or_put, profit, name_active, exp_timer, order_value):
-    for id_martingale in range(max_martingale + 1):
-
-        status, ordem_id = API.buy(order_value, name_active, call_or_put, exp_timer)
-        logger.info("Buy order id: {} status: {}".format(ordem_id, status))
+def trading_binary(call_or_put, profit, name_active, exp_timer, order_value, time_now):
+    for i in range(max_martingale + 1):
+        status, order_id = API.buy(order_value, name_active, call_or_put, exp_timer)
+        logger.info("Buy order id: {} status: {}".format(order_id, status))
 
         if status:
-            while True:
-                order_profit = API.check_win_v3(ordem_id)
-                status = API.api.result
-                if status:
-                    profit += round(order_profit, 2)
-                    order_value = order_value * 2
-                    break
+            order_profit = API.check_win_v3(order_id)
+            profit += round(order_profit, 2)
+            order_value = order_value * 2
+            add_order_to_the_report(call_or_put, exp_timer, name_active, order_value, profit, time_now)
             if order_profit > 0:
                 logger.info(
-                    "Profit order id: {}  order_profit: {} current profit: {} - WIN".format(ordem_id, order_profit,
+                    "Profit order id: {}  order_profit: {} current profit: {} - WIN".format(order_id, order_profit,
                                                                                             round(profit, 2)))
                 break
-            logger.info("Order id:{} Loss: {}".format(ordem_id, order_profit))
+            stop(profit, stop_gain, stop_loss)
+            logger.info("Order id:{} Loss: {}".format(order_id, order_profit))
             logger.info("Current profit: {}".format(profit))
             logger.info('Executing martingale')
-            stop(profit, stop_gain, stop_loss)
         else:
             logger.error('Error placing order')
-    return profit, call_or_put, order_value
+    return call_or_put, profit, name_active, exp_timer, order_value
+
+
+def add_order_to_the_report(call_or_put, exp_timer, name_active, order_value, profit, time_now):
+    time_order = time_now - timedelta(minutes=exp_timer)
+    report.loc[len(report) + 1] = [name_active, order_value, call_or_put, profit, time_order,
+                                   time_now, stop_gain, stop_loss]
 
 
 """
@@ -237,13 +243,13 @@ Executa o sinal.
 """
 
 
-def execute_signal(signal_data):
+def execute_signal(signal_data, time_now):
     name_active = str(signal_data[1])
     expiration_time = int(signal_data[2])
     call_or_put = signal_data[3].lower()
-    signal_value = config['wallet'] * config['pct_wallet']
+    signal_value = round(config['wallet'] * config['pct_wallet'], 2)
     operation_type = signal_data[4].lower()
-    run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type)
+    run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type, time_now)
 
 
 """
@@ -267,4 +273,8 @@ if __name__ == '__main__':
     max_martingale = config['max_martingale']
     stop_loss = config['wallet'] * config['pct_stop_loss']
     stop_gain = config['wallet'] * config['pct_stop_gain']
+    report = pd.DataFrame(
+        columns=['name_active', 'order_value', 'call_or_put', 'profit', 'time_order', 'time_exp',
+                 'stop_gain',
+                 'stop_loss'])
     connect()
