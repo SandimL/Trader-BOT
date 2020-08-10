@@ -1,0 +1,9 @@
+{
+  "email": "ra165341@ucdb.br",
+  "password": "querowinpora",
+  "max_martingale": 1,
+  "pct_stop_loss": 0.10,
+  "pct_stop_gain": 0.10,
+  "pct_wallet": 0.29,
+  "wallet": 100
+}
