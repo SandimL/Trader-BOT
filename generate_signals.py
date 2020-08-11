@@ -33,7 +33,7 @@ def create_filecsv(active):
                     hour += 1
                     minute = 0
                 call_or_put = random.choices(["call", "put"])
-                spamwriter.writerow(["{:0>2}:{:0>2}:00".format(hour, minute), active, 5, call_or_put[0], "b"])
+                spamwriter.writerow(["{:0>2}:{:0>2}:00".format(hour, minute), active, 1, call_or_put[0], "binary"])
 
 
 if __name__ == '__main__':
