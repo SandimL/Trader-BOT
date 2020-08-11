@@ -107,11 +107,14 @@ class Bot(Metrics):
         return timezone(self.API.get_profile_ansyc()['tz'])
 
     def is_valid_order(self, FMT, time_now, signal_hour, candle_size, name_active):
-        is_valid_datetime = datetime.strptime(time_now.strftime(FMT), FMT) < datetime.strptime(signal_hour, FMT)
-        if is_valid_datetime:
+        if datetime.strptime(time_now.strftime(FMT), FMT) == datetime.strptime(signal_hour, FMT):
             is_valid_SMA = self.is_valid_value_SMA(candle_size, name_active, time_now)
-            self.logger.info("valid SMA: {} - valid datetime: True".format(is_valid_SMA))
+            self.logger.info("Valid SMA: {} - valid datetime: True".format(is_valid_SMA))
+            del self.signals[0]
             return is_valid_SMA
+        elif datetime.strptime(time_now.strftime(FMT), FMT) > datetime.strptime(signal_hour, FMT):
+            del self.signals[0]
+            self.logger.info("Order with incorrect time, current time greater than the service order")
         return False
 
     def is_valid_value_SMA(self, candle_size, name_active, time_now):
@@ -128,20 +131,34 @@ class Bot(Metrics):
         operation_type = signal_data[4].lower()
         self.run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type, time_now)
 
-    def run_trader(self, name_active, order_value, call_or_put, exp_timer, operation_type, time_now):
-        if operation_type == "b":
-            self.trading_binary(call_or_put, name_active, exp_timer, order_value, time_now, 0)
-        elif operation_type == "d":
-            self.trading_digitals(call_or_put, name_active, exp_timer, order_value, time_now)
-
-    def trading_digitals(self, call_or_put, name_active, exp_timer, order_value, time_now, count_martingale,
-                         martingale=False):
+    def run_trader(self, name_active, order_value, call_or_put, exp_timer, operation_type, time_now, count_martingale=0,
+                   martingale=False):
         status, order_id = self.API.buy(order_value, name_active, call_or_put, exp_timer)
         self.logger.info("Buy order id: {} status: {}".format(order_id, status))
-        order_profit = round(self.API.check_win_digital_v2(order_id), 2)
-        self.profit += order_profit
-        self.add_order_to_the_report('digitals', call_or_put, exp_timer, name_active, order_value, time_now, martingale,
+        order_profit = self.update_profit(operation_type, order_id)
+        self.add_order_to_the_report(operation_type, call_or_put, exp_timer, name_active, order_value, time_now,
+                                     martingale,
                                      count_martingale)
+        if self.martingale:
+            count_martingale += 1
+            self.exec_martigale(operation_type, call_or_put, count_martingale, exp_timer, name_active, order_id,
+                                order_profit, order_value, time_now)
+        else:
+            self.logger.info(
+                "Profit order id: {}  order_profit: {} current profit: {}".format(order_id, order_profit,
+                                                                                  round(self.profit, 2)))
+
+    def update_profit(self, operation_type, order_id):
+        order_profit = 0
+        if operation_type == "binary":
+            order_profit = round(self.API.check_win_v3(order_id), 2)
+        elif operation_type == "digitals":
+            order_profit = round(self.API.check_win_digital_v2(order_id), 2)
+        self.profit += order_profit
+        return order_profit
+
+    def exec_martigale(self, operation_type, call_or_put, count_martingale, exp_timer, name_active, order_id,
+                       order_profit, order_value, time_now):
         if order_profit < 0 and self.martingale and self.max_martingale > count_martingale:
             self.stop()
             self.logger.info("Order id:{} Loss: {}".format(order_id, order_profit))
@@ -149,36 +166,8 @@ class Bot(Metrics):
             self.logger.info('Executing martingale')
             order_value = round(order_value * 2, 2)
             count_martingale += 1
-            self.trading_binary(call_or_put, name_active, exp_timer, order_value, time_now, count_martingale,
-                                True)
-        else:
-            self.logger.info(
-                "Profit order id: {}  order_profit: {} current profit: {}".format(order_id, order_profit,
-                                                                                  round(self.profit, 2)))
-        return call_or_put, name_active, exp_timer, order_value
-
-    def trading_binary(self, call_or_put, name_active, exp_timer, order_value, time_now, count_martingale,
-                       martingale=False):
-        status, order_id = self.API.buy(order_value, name_active, call_or_put, exp_timer)
-        self.logger.info("Buy order id: {} status: {}".format(order_id, status))
-        order_profit = round(self.API.check_win_v3(order_id), 2)
-        self.profit += order_profit
-        self.add_order_to_the_report('binary', call_or_put, exp_timer, name_active, order_value, time_now, martingale,
-                                     count_martingale)
-        if order_profit < 0 and self.martingale and self.max_martingale > count_martingale:
-            self.stop()
-            self.logger.info("Order id:{} Loss: {}".format(order_id, order_profit))
-            self.logger.info("Current profit: {}".format(self.profit))
-            self.logger.info('Executing martingale')
-            order_value = round(order_value * 2, 2)
-            count_martingale += 1
-            self.trading_binary(call_or_put, name_active, exp_timer, order_value, time_now, count_martingale,
-                                True)
-        else:
-            self.logger.info(
-                "Profit order id: {}  order_profit: {} current profit: {}".format(order_id, order_profit,
-                                                                                  round(self.profit, 2)))
-        return call_or_put, name_active, exp_timer, order_value
+            self.run_trader(name_active, order_value, call_or_put, exp_timer, operation_type, time_now,
+                            count_martingale, martingale=False)
 
     def add_order_to_the_report(self, trading_instrument, call_or_put, exp_timer, name_active, order_value, time_now,
                                 martingale,
@@ -192,17 +181,21 @@ class Bot(Metrics):
         FMT = '%H:%M:%S'
         while len(self.signals) > 0:
             time_now = self.horary()
-            signal_data = self.signals[0]
-            candle_size = int(signal_data[2]) * 60
-            name_active = str(signal_data[1])
-            signal_hour = signal_data[0]
+            candle_size, name_active, signal_data, signal_hour = self.parse_signals()
             if self.is_valid_order(FMT, time_now, signal_hour, candle_size, name_active):
-                wait_time = datetime.strptime(signal_hour, FMT) - datetime.strptime(time_now.strftime(FMT), FMT)
                 self.logger.info('Running signal: {}'.format(signal_data))
-                time.sleep(wait_time.seconds - 1)
-                self.signals.remove(signal_data)
                 self.execute_signal(signal_data, time_now)
+        self.generate_report()
+
+    def generate_report(self):
         self.report.to_csv(self.path_report, index=False)
+
+    def parse_signals(self):
+        signal_data = self.signals[0]
+        candle_size = int(signal_data[2]) * 60
+        name_active = str(signal_data[1])
+        signal_hour = signal_data[0]
+        return candle_size, name_active, signal_data, signal_hour
 
 
 if __name__ == '__main__':
