@@ -36,15 +36,19 @@ class Bot(Metrics):
         self.path_signals = path_signals
         self.path_report = path_report
         self.profit = 0
-        self.signals = None
+        self.soros_profit = 0
+        self.count_soros = 0
         self.balance = None
+        self.report = None
+        self.signals = None
+        # config
         self.stop_gain = None
         self.stop_loss = None
         self.max_martingale = None
+        self.max_soros = None
         self.martingale = None
+        self.soros = None
         self.wallet = None
-        self.signals = None
-        self.report = None
 
     def log(self):
         FMT = '%(levelname)s - %(asctime)s - MSG: %(message)s'
@@ -86,11 +90,12 @@ class Bot(Metrics):
         self.stop_gain = self.wallet * self.config['pct_stop_gain']
         self.max_martingale = self.config['max_martingale']
         self.martingale = self.config['martingale']
+        self.max_soros = self.config['max_soros']
+        self.soros = self.config['soros']
         self.API.change_balance(self.config['balance_mode'])
         self.report = pd.DataFrame(
-            columns=['trading_instrument', 'name_active', 'order_value', 'call_or_put', 'profit', 'martingale',
-                     'count_martingale',
-                     'time_order', 'time_exp'])
+            columns=['operation_type', 'name_active', 'order_value', 'call_or_put', 'profit', 'martingale',
+                     'count_martingale', 'soros', 'count_soros', 'time_order', 'time_exp'])
 
     def load_signals(self):
         self.logger.info('Load signals')
@@ -114,7 +119,7 @@ class Bot(Metrics):
             return is_valid_SMA
         elif datetime.strptime(time_now.strftime(FMT), FMT) > datetime.strptime(signal_hour, FMT):
             del self.signals[0]
-            self.logger.info("Order with incorrect time, current time greater than the service order")
+            self.logger.warning("Order with incorrect time, current time greater than the service order")
         return False
 
     def is_valid_value_SMA(self, candle_size, name_active, time_now):
@@ -127,28 +132,33 @@ class Bot(Metrics):
         name_active = str(signal_data[1])
         expiration_time = int(signal_data[2])
         call_or_put = signal_data[3].lower()
-        signal_value = round(self.wallet * self.config['pct_wallet'], 2)
+        signal_value = self.calc_signal_value()
         operation_type = signal_data[4].lower()
         self.run_trader(name_active, signal_value, call_or_put, expiration_time, operation_type, time_now)
+
+    def calc_signal_value(self):
+        signal_value = round(self.wallet * self.config['pct_wallet'], 2)
+        if self.soros:
+            return signal_value + self.soros_profit
+        return signal_value
 
     def run_trader(self, name_active, order_value, call_or_put, exp_timer, operation_type, time_now, count_martingale=0,
                    martingale=False):
         status, order_id = self.API.buy(order_value, name_active, call_or_put, exp_timer)
         self.logger.info("Buy order id: {} status: {}".format(order_id, status))
-        order_profit = self.update_profit(operation_type, order_id)
+        order_profit = self.update_value_profit(operation_type, order_id)
         self.add_order_to_the_report(operation_type, call_or_put, exp_timer, name_active, order_value, time_now,
-                                     martingale,
-                                     count_martingale)
+                                     martingale, count_martingale, self.count_soros > 0, self.count_soros)
+        self.logger.info(
+            "Profit order id: {}  order_profit: {} current profit: {}".format(order_id, order_profit,
+                                                                              round(self.profit, 2)))
         if self.martingale:
-            count_martingale += 1
             self.exec_martigale(operation_type, call_or_put, count_martingale, exp_timer, name_active, order_id,
                                 order_profit, order_value, time_now)
-        else:
-            self.logger.info(
-                "Profit order id: {}  order_profit: {} current profit: {}".format(order_id, order_profit,
-                                                                                  round(self.profit, 2)))
+        elif self.soros:
+            self.exec_soros(order_id, order_profit)
 
-    def update_profit(self, operation_type, order_id):
+    def update_value_profit(self, operation_type, order_id):
         order_profit = 0
         if operation_type == "binary":
             order_profit = round(self.API.check_win_v3(order_id), 2)
@@ -156,6 +166,20 @@ class Bot(Metrics):
             order_profit = round(self.API.check_win_digital_v2(order_id), 2)
         self.profit += order_profit
         return order_profit
+
+    def exec_soros(self, order_id, order_profit):
+        if order_profit > 0 and self.soros and self.max_soros > self.count_soros:
+            self.stop()
+            self.count_soros += 1
+            self.soros_profit += order_profit
+            self.logger.info(
+                "Order id:{} WIN: {} Current profit: {}".format(order_id, order_profit, round(self.profit, 2)))
+            self.logger.info(
+                'Executing soros - soros_profit: {} count_soros: {}'.format(self.soros_profit,
+                                                                            self.count_soros))
+        else:
+            self.soros_profit = 0
+            self.count_soros = 0
 
     def exec_martigale(self, operation_type, call_or_put, count_martingale, exp_timer, name_active, order_id,
                        order_profit, order_value, time_now):
@@ -167,14 +191,14 @@ class Bot(Metrics):
             order_value = round(order_value * 2, 2)
             count_martingale += 1
             self.run_trader(name_active, order_value, call_or_put, exp_timer, operation_type, time_now,
-                            count_martingale, martingale=False)
+                            count_martingale, martingale=True)
 
-    def add_order_to_the_report(self, trading_instrument, call_or_put, exp_timer, name_active, order_value, time_now,
-                                martingale,
-                                count_martingale):
+    def add_order_to_the_report(self, operation_type, call_or_put, exp_timer, name_active, order_value, time_now,
+                                martingale, count_martingale, soros, count_soros):
         time_order = time_now - timedelta(minutes=exp_timer)
-        self.report.loc[len(self.report) + 1] = [trading_instrument, name_active, order_value, call_or_put,
-                                                 round(self.profit, 2), martingale, count_martingale, time_order,
+        self.report.loc[len(self.report) + 1] = [operation_type, name_active, order_value, call_or_put,
+                                                 round(self.profit, 2), martingale, count_martingale, soros,
+                                                 count_soros, time_order,
                                                  time_now]
 
     def process(self):
