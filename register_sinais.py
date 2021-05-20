@@ -12,7 +12,7 @@ def timestamp_converter(x):  # Função para converter timestamp
 
     return hora
 
-API = IQ_Option('ra165341@ucdb.br', 'querowinpora')
+API = IQ_Option('login', 'senha')
 API.connect()
 API.change_balance('PRACTICE')
 
